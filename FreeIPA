@@ -1,0 +1,127 @@
+1. Executar a criação de um subdominio no AD
+dnscmd 127.0.0.1 /ZoneAdd linuxclaranet.local /Forwarder 192.168.130.149
+dnscmd 127.0.0.1 /ClearCache
+
+2. Renomear o servidor e ajustar a resolução dos nomes no IPA SERVER
+echo "192.168.130.149 sv-ipa-cfx01.linuxclaranet.local sv-ipa-cfx01" >> /etc/hosts
+echo "sv-ipa-cfx01.linuxclaranet.local" >> /etc/hostname
+
+3. Remover SELINUX, FIREWALL e NTP do CENTOS
+setenforce 0
+sed -i 's/^SELINUX=.*/SELINUX=disabled/g' /etc/selinux/config
+timedatectl set-ntp yes
+	
+
+4. Instalar os pacotes necessário para o serviço IPA
+yum module list idm
+yum module info idm:DL1
+yum install @idm:DL1 -y
+yum install ipa-server-trust-ad bind bind-utils bind-dyndb-ldap ipa-server-dns -y
+
+
+5. Configurar os serviços para o IPA SERVER
+ipa-server-install --setup-dns
+
+6.Iniciar o KERBERUS TICKET
+kinit admin
+Colocar a senha do admin do servidor IPA
+
+7. Criando relação de confiança com o dominio
+ipa-adtrust-install –-netbios-name=LINUXCLARANET –-add-sids –-unattended
+Do you wish to continue? [no]: yes
+Enable trusted domains support in slapi-nis? [no]: no
+Do you want to run the ipa-sidgen task? [no]: no
+
+8. Verificar o arquivo resolv.conf
+search linuxclaranet.local
+nameserver 192.168.130.145
+nameserver 127.0.0.1
+
+9. Criando encaminhador de DNS para o dominio AD
+ipa dnsforwardzone-add ibn.local --forwarder=192.168.130.145 --forward-policy=only
+
+10. Teste DNS entre os dominios
+10.1. Windows AD
+nslookup
+ > set type=srv
+ > _ldap._tcp.ibn.local
+ > _ldap._tcp.linuxclaranet.local
+ exit
+
+10.2. Linux IDM
+dig SRV _ldap._tcp.ibn.local
+dig SRV _ldap._tcp.linuxclaranet.local
+
+11.Criando a relação de confiança com o AD
+ipa trust-add --type=ad ibn.local
+Active Directory domain administrator: administrator
+Active Directory domain administrator's password: Senha do Administrador do dominio ibn.local
+
+10. Checando a relação de confiança.
+ipa trust-fetch-domains "ibn.local"
+ipa trustdomain-find ibn.local
+ipa trust-show --all
+ipa trust-show ibn.local
+
+11. Testando ticket kerberos
+kinit Administrator@ibn.local
+Senha do Administrador do dominio ibn.local
+klist
+
+12. Criando grupos externos no IDM para mapeamento dos acessos do AD
+
+ipa group-add --external ad_users_external_freeipa --desc="AD users external for CLARANET_SUDO"
+ipa group-add ad_sshaccess_users –-desc="AD SSH access users"
+ipa group-add-member ad_users_external_freeipa --external 'CLARANET_SUDO@ibn.local'
+
+13. Adicionando grupo externo para o grupo POSIX (LINUX)
+ipa group-add-member ad_sshaccess_users --groups=ad_users_external_freeipa
+
+14. Verificando as contas dos usuários do domínio
+getent passwd nomedousuário@ibn.local
+
+CONFIGURAÇÕES ADICIONAIS PARA PARAMETRIZAR REGRAS E ACESSO
+
+1. Definir o bash como shell default
+ipa config-mod --defaultshell=/bin/bash
+
+2. Criando grupo default para servidores Linux adicionados no IDM
+ipa hostgroup-add linux_server
+ipa automember-add linux_server --type=hostgroup
+ipa automember-add-condition --type=hostgroup linux_server --inclusive-regex=.* --key=fqdn
+
+3. Em seguida, vá para o painel de administração da Web do FreeIPA e abra Policy -> Host Based Access Control. Desative a regra allow_all e adicione e edite uma nova regra com o nome allowed_groups.
+   Adicione ad_sshaccess_users e o grupo de hosts linux_server a este grupo com o botão Adicionar
+
+3. Criando regra para acesso de sudo nos servidores Linux
+ipa sudorule-add --cmdcat=all sudo_claranet
+ipa sudorule-add-host sudo_claranet --hostgroups=linux_server
+ipa sudorule-add-user sudo_claranet --groups=ad_sshaccess_users
+
+INSTALL CLIENT IPA
+
+1.Adicionar as informações de DNS e de domínio na placa de rede do client 
+DNS1= 192.168.130.149
+DOMAIN=linuxclaranet.local
+
+2.Verificar o FQDN do cliente para ingressar no IDM
+echo "192.168.130.142 sv-cli-eqx21.linuxclaranet.local sv-ipa-cfx01" >> /etc/hosts
+echo "sv-cli-eqx21.linuxclaranet.local" >> /etc/hostname
+
+3. Instalando o client do IPA
+yum install freeipa-client ipa-admintools -y
+
+4.Checando as resoluções dos nomes
+# dig linuxclaranet.local @192.168.130.149
+# dig -x 192.168.130.149
+
+5. Configurando o client do IPA para que acesse o IDM
+ipa-client-install --enable-dns-updates --force-ntpd --mkhomedir
+User authorized to enroll computers: admin
+Password for admin@LINUXCLARANET.LOCAL:
+
+6. Validar os usuários do AD no cliente
+getent passwd usuário do dominio@dominio.local
+
+7. Checando logs para validação de acesso
+tail -f /var/log/secure/
