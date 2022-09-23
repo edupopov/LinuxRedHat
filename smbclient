@@ -1,0 +1,10 @@
+# Para se conectar a um compartilhamento SMB use o comando smbclient
+
+# Compartilhamento direto sem espaços
+smbclient -U ominio/usuario //endereco-compartilhamento
+
+# Compartilhamento com aspas duplas para apoiar com espaços entre o nome e caminhos
+smbclient -U ominio/usuario "//endereco compartilhamento"
+
+# Compartilhamento com %20 para espaços - adicione o %20 para espaços no nome do caminho ou arquivos
+smbclient -U ominio/usuario //endereco%20compartilhamento
