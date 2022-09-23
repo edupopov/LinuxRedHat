@@ -8,3 +8,6 @@ smbclient -U ominio/usuario "//endereco compartilhamento"
 
 # Compartilhamento com %20 para espaços - adicione o %20 para espaços no nome do caminho ou arquivos
 smbclient -U ominio/usuario //endereco%20compartilhamento
+
+# Utilizando parametro de cópia - Lembrando que precisa colocar todo o get em aspas simples '' e somente o caminho entre aspas duplas ""
+smbclient //endereco-compartilhamento -U dominio/usuario -c 'get "/caminho/algo.exe" /tmp/algo.exe;'
