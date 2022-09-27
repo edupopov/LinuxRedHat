@@ -11,3 +11,6 @@ smbclient -U ominio/usuario //endereco%20compartilhamento
 
 # Utilizando parametro de cópia - Lembrando que precisa colocar todo o get em aspas simples '' e somente o caminho entre aspas duplas ""
 smbclient //endereco-compartilhamento -U dominio/usuario -c 'get "/caminho/algo.exe" /tmp/algo.exe;'
+
+# Copia o diretório remoto para o diretório local que você está no momento
+smbclient //pasta-compartilhada/diretorio1 -U dominio/usuario%senha-do-usuario -c "prompt;recurse;cd /Diretorio02/Diretorio03;mget nome_da_pasta"
